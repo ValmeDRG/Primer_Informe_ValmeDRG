@@ -1,0 +1,159 @@
+---
+title: "Mi primer Rmarkdown"
+author: "Valme del Río García"
+date: "2022/07/20"
+output:
+  pdf_document: 
+    toc: true
+    toc_depth: 3
+  word_document:
+    reference_docx: plantilla.docx
+    toc: true
+    toc_depth: 3
+  html_document: 
+    toc: true
+    toc_depth: 3
+bibliography: references.bib
+csl: vancouver.csl
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(gtsummary)
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(graphics)
+library(survival)
+library(survminer)
+library(sf)
+
+data(trial)
+trial$response=as.character(trial$response)
+trial$death=as.character(trial$death)
+
+
+trial <- read_excel("trial.xlsx",
+                    col_types = c("text",
+                    "text", "numeric", "numeric", "text", 
+                    "text", "text", "text", "numeric"))
+
+trial
+colnames(trial)[1]="id"
+attr(trial$trt, "label")="Tratamiento"
+attr(trial$age, "label")="Edad"
+attr(trial$marker, "label")="Marcadores Tumorales ng/mL"
+attr(trial$stage, "label")="Estadio"
+attr(trial$grade, "label")="Grado"
+attr(trial$response, "label")="Respuesta Tumoral"
+attr(trial$death, "label")="Resultado al final del Seguimiento"
+attr(trial$ttdeath, "label")="Tiempo de seguimiento en meses"
+
+trial2=trial %>% 
+  select(trt, death) %>% 
+  mutate(death=replace(death, death =='0', "vivo")) %>% 
+  mutate(death=replace(death, death =='1', "fallecido")) %>% 
+  group_by(trt,death) %>% 
+  summarise(casos=n())
+
+trial3 = trial 
+  trial3$death=as.numeric(trial3$death)
+  
+  ##Cargamos datos de sf de Andalucía
+  
+f1 = read_sf(dsn=".", layer= "14_01_CtxLimites")
+
+cod_ine_and = c('04', '11', '14', '18', '21', '23', '29', '41')
+
+m1 =
+  f1 %>% 
+  filter (pais == 'España') %>% 
+  filter (tipo_dem == 'Provincia') %>% 
+  filter (cod_ine %in% cod_ine_and)
+
+d1=Tasas <- read_excel("Tasas.xlsx")
+View(Tasas)
+
+colnames(d1)[1]="cod_ine"
+d1
+
+m2=merge(m1, d1, all.x=TRUE, by="cod_ine")
+```
+
+## R Markdown
+
+### **Mi primer gráfico**
+
+Mi primera citación [@Chen2020]
+
+```{r echo=FALSE, fig.align='center'}
+ggplot(trial2) +
+  aes(x = trt, y = casos) +
+  geom_col(fill = "#112446") +
+  labs(
+    x = "Tratamiento",
+    y = "Número de casos",
+    title = "Distribución de casos al final del seguimiento",
+    subtitle = "Tratamiento,
+    resultado al final del tratamiento"
+  ) +
+  theme_minimal() +
+  facet_wrap(vars(death))
+
+```
+
+### **Mi primera tabla incluyendo test de hipótesis**
+
+```{r echo=FALSE, fig.align='center'}
+trial %>% 
+  select(-id) %>% 
+  mutate(response=replace(response, response == "1.0", "Positiva")) %>% 
+  mutate(response=replace(response, response == "0.0", "Negativa")) %>% 
+  mutate(death=replace(death, death =='0.0', "Vivo")) %>% 
+  mutate(death=replace(death, death =='1.0', "Fallecido")) %>% 
+  
+  gtsummary::tbl_summary(by ="trt") %>% 
+  add_n() %>% 
+  add_p()
+
+
+```
+
+### Gráfico diagrama de cajas
+
+```{r Grafico Cajas, echo=FALSE, fig.align='center'}
+boxplot(ttdeath~death, data=trial, id=list(method="y"))
+```
+
+### Gráfico de Supervivencia
+
+Mi segunda citación [@geribaldi-doldán2018]
+
+```{r grafico_survival, echo=FALSE, fig.height=6, fig.align='center'}
+
+Survfit <- survfit(Surv(ttdeath, death) ~ trt, conf.type="log", 
+        conf.int=0.95, type="kaplan-meier", error="greenwood", data=trial3)
+
+survminer::ggsurvplot(Survfit,
+                        conf.int = TRUE,
+                        pval = TRUE,
+                        risk.table = TRUE)
+                        
+```
+
+### Gráfico Tasa Andalucía (Datos Aleatorios)
+
+Mi tercera citación[@Carmona-Jiménez2021]
+
+```{r grafico_andalucia, echo=FALSE, fig.align='center'}
+ggplot(m2) +
+  aes(fill = Tasa, group = tipo_dem) +
+  geom_sf(size = 1.2) +
+  geom_sf_label(aes(label=nombre))+
+  scale_fill_gradient(low = "#3CD828", high = "#CE4A11") +
+  theme_minimal()
+```
+
+Paquetes usados con R [@gtsummary][@ggplot2][@dplyr][@readxl][@graphics][@survival][@survminer][@sf]
+
+### Bibliografía
